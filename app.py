@@ -2,12 +2,11 @@ import streamlit as st
 import pandas as pd
 import datetime
 
-# --- Dados simulados ---
+# -------------------- Dados Simulados --------------------
 usuarios = {"admin": "1234"}
 clientes = []
 vendas = []
 
-# Simulação de dados de preço por modelo
 precos_mock = {
     "iPhone 11 64GB": {"mercado_livre": 2350, "olx": 2200, "shopee": 2400},
     "iPhone 12 128GB": {"mercado_livre": 2850, "olx": 2700, "shopee": 2950},
@@ -32,137 +31,134 @@ estoque_demo = [
     {"modelo": "iPhone 13 Pro Max 256GB", "qtd": 1, "data": "2024-11-05", "custo": 4300.0},
 ]
 
-# Funções auxiliares
+# -------------------- Funções Auxiliares --------------------
 def calcular_media(modelo):
     fontes = precos_mock.get(modelo, {})
     return sum(fontes.values()) / len(fontes) if fontes else 0
 
 def calcular_margem(custo, preco_medio):
-    if custo == 0:
-        return 0
-    return ((preco_medio - custo) / custo) * 100
+    return ((preco_medio - custo) / custo) * 100 if custo > 0 else 0
 
 def previsao_desvalorizacao(modelo):
     base = calcular_media(modelo)
-    return {
-        "7 dias": base * 0.98,
-        "30 dias": base * 0.95,
-        "60 dias": base * 0.92
-    }
+    return {"7 dias": base * 0.98, "30 dias": base * 0.95, "60 dias": base * 0.92}
 
 def gerar_combos(estoque):
-    combos = []
-    for item in estoque:
-        if item["qtd"] >= 2:
-            combos.append({
-                "combo": f"{item['modelo']} + Película + Capa",
-                "preco_sugerido": calcular_media(item['modelo']) + 50
-            })
-    return combos
+    return [{"combo": f"{i['modelo']} + Película + Capa", "preco_sugerido": calcular_media(i['modelo']) + 50} for i in estoque if i['qtd'] >= 2]
 
 def calcular_custo_reparo(avarias):
-    return sum([custo_reparo[a] for a in avarias if a in custo_reparo])
+    return sum([custo_reparo.get(a, 0) for a in avarias])
 
-def gerar_insights(modelo, estoque):
-    estoque_item = next((item for item in estoque if item['modelo'] == modelo), None)
-    insights = []
-    if estoque_item:
-        if estoque_item['qtd'] > 3:
-            insights.append("✅ Ofereça brinde: estoque alto do modelo")
-        elif estoque_item['qtd'] == 1:
-            insights.append("⚠️ Última unidade! Use escassez para fechar a venda")
-        else:
-            insights.append("📦 Estoque moderado. Priorize giro.")
-    else:
-        insights.append("🔍 Modelo não está no estoque atual.")
-    return insights
+def gerar_insights(modelo):
+    item = next((i for i in estoque_demo if i['modelo'] == modelo), None)
+    if item:
+        if item['qtd'] > 3: return ["✅ Ofereça brinde"]
+        elif item['qtd'] == 1: return ["⚠️ Última unidade"]
+        return ["📦 Estoque moderado"]
+    return ["🚫 Fora de estoque"]
 
 def registrar_venda(modelo, cliente, vendedor, garantia):
     for item in estoque_demo:
         if item['modelo'] == modelo and item['qtd'] > 0:
             item['qtd'] -= 1
-            vendas.append({
-                "modelo": modelo,
-                "cliente": cliente,
-                "vendedor": vendedor,
-                "garantia": garantia,
-                "data": datetime.date.today().isoformat()
-            })
-            clientes.append(cliente)
+            vendas.append({"modelo": modelo, "cliente": cliente, "vendedor": vendedor, "garantia": garantia, "data": datetime.date.today().isoformat()})
+            clientes.append({"nome": cliente, "data": datetime.date.today().isoformat()})
             return True
     return False
 
 def verificar_similares(modelo):
-    similares = [item for item in estoque_demo if modelo.split()[1] in item['modelo']]
-    if similares:
-        return f"🔎 Existem modelos similares em estoque: {[s['modelo'] for s in similares]}"
-    else:
-        return "🚫 Nenhum modelo similar no estoque. Os últimos saíram em menos de 3 dias. Considere melhorar a oferta."
+    match = [e['modelo'] for e in estoque_demo if modelo.split()[1] in e['modelo']]
+    return f"🔎 Similares no estoque: {match}" if match else "🚫 Nenhum similar. Últimos duraram < 3 dias."
 
-# Autenticação
+# -------------------- Login --------------------
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
 if not st.session_state['logado']:
     st.title("🔐 Login de Acesso")
-    usuario = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
-        if usuario in usuarios and usuarios[usuario] == senha:
-            st.session_state['logado'] = True
-        else:
-            st.error("Usuário ou senha inválidos. Use admin / 1234")
+    u, s = st.text_input("Usuário"), st.text_input("Senha", type="password")
+    if st.button("Entrar") and usuarios.get(u) == s:
+        st.session_state['logado'] = True
+    elif u or s:
+        st.error("Credenciais inválidas. Use admin / 1234")
     st.stop()
 
-# App Principal
+# -------------------- Dashboard --------------------
+st.set_page_config(layout="wide")
 st.title("🍏 AppleProTools – Plataforma para Lojistas Apple")
 
 aba = st.sidebar.radio("Escolha um módulo:", [
-    "Consulta de Preços", "Calculadora de Margem", "Previsão de Queda", "Gestão de Estoque",
-    "Sugestão de Combos", "Simulador de Troca", "Insights para Fechamento",
-    "Registro de Venda", "Relatório de Vendas", "Busca por Garantia", "CRM"
-])
+    "Dashboard", "Consulta de Preços", "Calculadora de Margem", "Previsão de Queda",
+    "Gestão de Estoque", "Sugestão de Combos", "Simulador de Troca", "Insights para Fechamento",
+    "Registro de Venda", "Relatório de Vendas", "Busca por Garantia", "CRM"])
 
-if aba == "Registro de Venda":
-    st.subheader("📝 Registrar nova venda")
-    modelo_vendido = st.selectbox("Modelo vendido:", list(precos_mock.keys()))
-    nome_cliente = st.text_input("Nome do cliente")
-    documento = st.text_input("CPF ou documento")
-    aniversario = st.date_input("Data de nascimento")
-    vendedor = st.text_input("Nome do vendedor")
-    garantia = st.date_input("Início da garantia")
-    if st.button("Registrar venda"):
-        sucesso = registrar_venda(modelo_vendido, nome_cliente, vendedor, garantia.isoformat())
-        if sucesso:
-            st.success("✅ Venda registrada e estoque atualizado.")
-        else:
-            st.error("❌ Modelo sem estoque disponível. Verifique novamente.")
+if aba == "Dashboard":
+    st.subheader("📊 Visão Geral")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Estoque total", sum(i['qtd'] for i in estoque_demo))
+    col2.metric("Vendas realizadas", len(vendas))
+    col3.metric("Clientes registrados", len(clientes))
+    st.markdown("---")
+    st.write("🔁 Últimas vendas")
+    st.dataframe(pd.DataFrame(vendas[-5:]) if vendas else pd.DataFrame([{"status": "sem dados"}]))
+
+elif aba == "Consulta de Preços":
+    m = st.selectbox("Modelo:", list(precos_mock.keys()))
+    if st.button("🔍 Pesquisar"):
+        df = pd.DataFrame(precos_mock[m].items(), columns=["Fonte", "Preço"])
+        st.dataframe(df)
+        st.success(f"Preço médio: R$ {calcular_media(m):.2f}")
+
+elif aba == "Calculadora de Margem":
+    m = st.selectbox("Modelo:", list(precos_mock.keys()))
+    c = st.number_input("Custo total:", min_value=0.0)
+    if c:
+        media = calcular_media(m)
+        st.write(f"📊 Margem: {calcular_margem(c, media):.2f}% (Preço médio: R$ {media:.2f})")
+
+elif aba == "Previsão de Queda":
+    m = st.selectbox("Modelo:", list(precos_mock.keys()))
+    st.dataframe(pd.DataFrame(previsao_desvalorizacao(m).items(), columns=["Período", "Estimativa R$"]))
+
+elif aba == "Gestão de Estoque":
+    df = pd.DataFrame(estoque_demo)
+    df['dias_em_estoque'] = df['data'].apply(lambda d: (datetime.datetime.now() - datetime.datetime.strptime(d, "%Y-%m-%d")).days)
+    st.dataframe(df)
+
+elif aba == "Sugestão de Combos":
+    st.dataframe(pd.DataFrame(gerar_combos(estoque_demo)))
+
+elif aba == "Simulador de Troca":
+    d, u = st.selectbox("Desejado:", list(precos_mock)), st.selectbox("Usado:", list(precos_mock))
+    a = st.multiselect("Avarias:", list(custo_reparo))
+    val_u, val_d = calcular_media(u) - calcular_custo_reparo(a), calcular_media(d)
+    st.write(f"Cliente paga: R$ {val_d - val_u:.2f} | Margem estimada: {calcular_margem(val_u, val_d):.2f}%")
+    st.caption(verificar_similares(d))
+
+elif aba == "Insights para Fechamento":
+    m = st.selectbox("Modelo:", list(precos_mock))
+    for i in gerar_insights(m): st.write(f"- {i}")
+
+elif aba == "Registro de Venda":
+    m = st.selectbox("Modelo vendido:", list(precos_mock))
+    cli = st.text_input("Nome do cliente")
+    doc = st.text_input("Documento")
+    ven = st.text_input("Vendedor")
+    gar = st.date_input("Início da garantia")
+    if st.button("Registrar") and cli and ven:
+        registrar_venda(m, cli, ven, gar.isoformat())
+        st.success("Venda registrada.")
 
 elif aba == "Relatório de Vendas":
-    st.subheader("📊 Relatório de Vendas")
-    df = pd.DataFrame(vendas)
-    if not df.empty:
-        st.dataframe(df)
-    else:
-        st.info("Nenhuma venda registrada ainda.")
+    st.dataframe(pd.DataFrame(vendas))
 
 elif aba == "Busca por Garantia":
-    st.subheader("🔎 Buscar garantia por nome")
-    nome = st.text_input("Nome do cliente para consulta")
-    resultado = [v for v in vendas if v['cliente'] == nome]
-    if resultado:
-        df = pd.DataFrame(resultado)
-        st.dataframe(df)
-    elif nome:
-        st.warning("Nenhuma venda encontrada para este nome.")
+    nome = st.text_input("Nome do cliente")
+    r = [v for v in vendas if v['cliente'] == nome]
+    st.dataframe(pd.DataFrame(r)) if r else st.warning("Nada encontrado.")
 
 elif aba == "CRM":
-    st.subheader("📞 CRM – Retenção e Relacionamento")
     hoje = datetime.date.today()
-    clientes_12m = [v for v in vendas if (hoje - datetime.date.fromisoformat(v['data'])).days > 365]
-    aniversariantes = [c for c in clientes if isinstance(c, str)]
-    if clientes_12m:
-        st.markdown("### 📆 Clientes com última compra há mais de 12 meses")
-        st.dataframe(pd.DataFrame(clientes_12m))
-    else:
-        st.info("Nenhum cliente com mais de 12 meses ainda.")
+    inativos = [v for v in vendas if (hoje - datetime.date.fromisoformat(v['data'])).days > 365]
+    st.subheader("📆 Inativos há 12+ meses")
+    st.dataframe(pd.DataFrame(inativos) if inativos else pd.DataFrame([{"status": "Nenhum encontrado"}]))
