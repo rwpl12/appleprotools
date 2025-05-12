@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 import datetime
 
+# --- Dados simulados ---
+usuarios = {"admin": "1234"}
+clientes = []
+vendas = []
+
 # Simulação de dados de preço por modelo
 precos_mock = {
     "iPhone 11 64GB": {"mercado_livre": 2350, "olx": 2200, "shopee": 2400},
@@ -72,10 +77,18 @@ def gerar_insights(modelo, estoque):
         insights.append("🔍 Modelo não está no estoque atual.")
     return insights
 
-def registrar_venda(modelo):
+def registrar_venda(modelo, cliente, vendedor, garantia):
     for item in estoque_demo:
         if item['modelo'] == modelo and item['qtd'] > 0:
             item['qtd'] -= 1
+            vendas.append({
+                "modelo": modelo,
+                "cliente": cliente,
+                "vendedor": vendedor,
+                "garantia": garantia,
+                "data": datetime.date.today().isoformat()
+            })
+            clientes.append(cliente)
             return True
     return False
 
@@ -86,95 +99,70 @@ def verificar_similares(modelo):
     else:
         return "🚫 Nenhum modelo similar no estoque. Os últimos saíram em menos de 3 dias. Considere melhorar a oferta."
 
-# Interface Streamlit
-st.set_page_config(layout="wide", page_title="AppleProTools", page_icon="🍏")
-st.markdown("""
-    <style>
-    .main {background-color: #f7f9fc;}
-    .stApp {padding: 2rem;}
-    .css-1d391kg {background: #fff; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1);}
-    </style>
-""", unsafe_allow_html=True)
+# Autenticação
+if 'logado' not in st.session_state:
+    st.session_state['logado'] = False
 
+if not st.session_state['logado']:
+    st.title("🔐 Login de Acesso")
+    usuario = st.text_input("Usuário")
+    senha = st.text_input("Senha", type="password")
+    if st.button("Entrar"):
+        if usuario in usuarios and usuarios[usuario] == senha:
+            st.session_state['logado'] = True
+        else:
+            st.error("Usuário ou senha inválidos. Use admin / 1234")
+    st.stop()
+
+# App Principal
 st.title("🍏 AppleProTools – Plataforma para Lojistas Apple")
 
 aba = st.sidebar.radio("Escolha um módulo:", [
     "Consulta de Preços", "Calculadora de Margem", "Previsão de Queda", "Gestão de Estoque",
-    "Sugestão de Combos", "Simulador de Troca", "Insights para Fechamento", "Registro de Venda"
+    "Sugestão de Combos", "Simulador de Troca", "Insights para Fechamento",
+    "Registro de Venda", "Relatório de Vendas", "Busca por Garantia", "CRM"
 ])
 
-if aba == "Consulta de Preços":
-    modelo = st.selectbox("Selecione o modelo:", list(precos_mock.keys()))
-    if st.button("🔍 Pesquisar preços atualizados"):
-        st.success("Dados simulados atualizados com sucesso.")
-    if modelo:
-        fontes = precos_mock[modelo]
-        df = pd.DataFrame(list(fontes.items()), columns=["Fonte", "Preço (R$)"])
-        st.dataframe(df)
-        media = calcular_media(modelo)
-        st.success(f"Preço médio de mercado: R$ {media:.2f}")
-
-elif aba == "Calculadora de Margem":
-    modelo = st.selectbox("Modelo para cálculo:", list(precos_mock.keys()))
-    custo = st.number_input("Informe seu custo total (R$):", min_value=0.0, format="%.2f")
-    if modelo and custo:
-        preco_medio = calcular_media(modelo)
-        margem = calcular_margem(custo, preco_medio)
-        st.info(f"Preço médio atual: R$ {preco_medio:.2f}")
-        st.success(f"Margem estimada: {margem:.2f}%")
-
-elif aba == "Previsão de Queda":
-    modelo = st.selectbox("Modelo para previsão:", list(precos_mock.keys()))
-    if modelo:
-        st.subheader("📉 Previsão de desvalorização")
-        previsoes = previsao_desvalorizacao(modelo)
-        df = pd.DataFrame(previsoes.items(), columns=["Período", "Preço Estimado"])
-        st.dataframe(df)
-
-elif aba == "Gestão de Estoque":
-    st.subheader("📦 Estoque Atual")
-    df = pd.DataFrame(estoque_demo)
-    df['dias_em_estoque'] = df['data'].apply(lambda d: (datetime.datetime.now() - datetime.datetime.strptime(d, "%Y-%m-%d")).days)
-    st.dataframe(df)
-
-elif aba == "Sugestão de Combos":
-    st.subheader("🧠 Combos Inteligentes Sugeridos")
-    combos = gerar_combos(estoque_demo)
-    df = pd.DataFrame(combos)
-    st.dataframe(df)
-    st.caption("Combos criados com base no estoque parado e maior margem de revenda.")
-
-elif aba == "Simulador de Troca":
-    st.subheader("💱 Simulação de troca com aparelho usado")
-    modelo_desejado = st.selectbox("Modelo que o cliente deseja:", list(precos_mock.keys()))
-    modelo_usado = st.selectbox("Modelo do aparelho do cliente:", list(precos_mock.keys()))
-    avarias = st.multiselect("Selecione as avarias detectadas:", list(custo_reparo.keys()))
-    preco_medio_desejado = calcular_media(modelo_desejado)
-    preco_medio_usado = calcular_media(modelo_usado)
-    desconto_reparo = calcular_custo_reparo(avarias)
-    valor_oferecido = preco_medio_usado - desconto_reparo
-    valor_a_pagar = preco_medio_desejado - valor_oferecido
-    margem = calcular_margem(valor_oferecido + desconto_reparo, preco_medio_desejado)
-    st.markdown(f"📱 Valor médio do aparelho desejado: R$ {preco_medio_desejado:.2f}")
-    st.markdown(f"♻️ Valor estimado do usado com avarias: R$ {valor_oferecido:.2f}")
-    st.markdown(f"💸 Diferença a ser paga pelo cliente: R$ {valor_a_pagar:.2f}")
-    st.success(f"📊 Margem estimada da negociação: {margem:.2f}%")
-    st.markdown(verificar_similares(modelo_desejado))
-
-elif aba == "Insights para Fechamento":
-    modelo_desejado = st.selectbox("Modelo que o cliente quer comprar:", list(precos_mock.keys()))
-    if modelo_desejado:
-        st.subheader("💡 Insights para o vendedor:")
-        for insight in gerar_insights(modelo_desejado, estoque_demo):
-            st.write("- ", insight)
-        st.caption("Use essas estratégias para convencer o cliente e fechar mais vendas.")
-
-elif aba == "Registro de Venda":
+if aba == "Registro de Venda":
     st.subheader("📝 Registrar nova venda")
     modelo_vendido = st.selectbox("Modelo vendido:", list(precos_mock.keys()))
+    nome_cliente = st.text_input("Nome do cliente")
+    documento = st.text_input("CPF ou documento")
+    aniversario = st.date_input("Data de nascimento")
+    vendedor = st.text_input("Nome do vendedor")
+    garantia = st.date_input("Início da garantia")
     if st.button("Registrar venda"):
-        sucesso = registrar_venda(modelo_vendido)
+        sucesso = registrar_venda(modelo_vendido, nome_cliente, vendedor, garantia.isoformat())
         if sucesso:
             st.success("✅ Venda registrada e estoque atualizado.")
         else:
             st.error("❌ Modelo sem estoque disponível. Verifique novamente.")
+
+elif aba == "Relatório de Vendas":
+    st.subheader("📊 Relatório de Vendas")
+    df = pd.DataFrame(vendas)
+    if not df.empty:
+        st.dataframe(df)
+    else:
+        st.info("Nenhuma venda registrada ainda.")
+
+elif aba == "Busca por Garantia":
+    st.subheader("🔎 Buscar garantia por nome")
+    nome = st.text_input("Nome do cliente para consulta")
+    resultado = [v for v in vendas if v['cliente'] == nome]
+    if resultado:
+        df = pd.DataFrame(resultado)
+        st.dataframe(df)
+    elif nome:
+        st.warning("Nenhuma venda encontrada para este nome.")
+
+elif aba == "CRM":
+    st.subheader("📞 CRM – Retenção e Relacionamento")
+    hoje = datetime.date.today()
+    clientes_12m = [v for v in vendas if (hoje - datetime.date.fromisoformat(v['data'])).days > 365]
+    aniversariantes = [c for c in clientes if isinstance(c, str)]
+    if clientes_12m:
+        st.markdown("### 📆 Clientes com última compra há mais de 12 meses")
+        st.dataframe(pd.DataFrame(clientes_12m))
+    else:
+        st.info("Nenhum cliente com mais de 12 meses ainda.")
