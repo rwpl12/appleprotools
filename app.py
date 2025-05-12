@@ -6,8 +6,11 @@ import datetime
 precos_mock = {
     "iPhone 11 64GB": {"mercado_livre": 2350, "olx": 2200, "shopee": 2400},
     "iPhone 12 128GB": {"mercado_livre": 2850, "olx": 2700, "shopee": 2950},
+    "iPhone 12 Pro 128GB": {"mercado_livre": 3350, "olx": 3200, "shopee": 3450},
     "iPhone 13 128GB": {"mercado_livre": 3250, "olx": 3100, "shopee": 3350},
+    "iPhone 13 Pro Max 256GB": {"mercado_livre": 4450, "olx": 4300, "shopee": 4550},
     "iPhone 14 128GB": {"mercado_livre": 3750, "olx": 3600, "shopee": 3850},
+    "iPhone 14 Pro Max 512GB": {"mercado_livre": 6250, "olx": 6100, "shopee": 6350},
 }
 
 custo_reparo = {
@@ -21,7 +24,7 @@ custo_reparo = {
 estoque_demo = [
     {"modelo": "iPhone 12 128GB", "qtd": 3, "data": "2024-11-10", "custo": 2700.0},
     {"modelo": "iPhone 11 64GB", "qtd": 5, "data": "2024-11-01", "custo": 2200.0},
-    {"modelo": "iPhone 13 128GB", "qtd": 2, "data": "2024-11-05", "custo": 3100.0},
+    {"modelo": "iPhone 13 Pro Max 256GB", "qtd": 1, "data": "2024-11-05", "custo": 4300.0},
 ]
 
 # Funções auxiliares
@@ -69,19 +72,41 @@ def gerar_insights(modelo, estoque):
         insights.append("🔍 Modelo não está no estoque atual.")
     return insights
 
+def registrar_venda(modelo):
+    for item in estoque_demo:
+        if item['modelo'] == modelo and item['qtd'] > 0:
+            item['qtd'] -= 1
+            return True
+    return False
+
+def verificar_similares(modelo):
+    similares = [item for item in estoque_demo if modelo.split()[1] in item['modelo']]
+    if similares:
+        return f"🔎 Existem modelos similares em estoque: {[s['modelo'] for s in similares]}"
+    else:
+        return "🚫 Nenhum modelo similar no estoque. Os últimos saíram em menos de 3 dias. Considere melhorar a oferta."
+
 # Interface Streamlit
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="AppleProTools", page_icon="🍏")
+st.markdown("""
+    <style>
+    .main {background-color: #f7f9fc;}
+    .stApp {padding: 2rem;}
+    .css-1d391kg {background: #fff; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1);}
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🍏 AppleProTools – Plataforma para Lojistas Apple")
 
 aba = st.sidebar.radio("Escolha um módulo:", [
     "Consulta de Preços", "Calculadora de Margem", "Previsão de Queda", "Gestão de Estoque",
-    "Sugestão de Combos", "Simulador de Troca", "Insights para Fechamento"
+    "Sugestão de Combos", "Simulador de Troca", "Insights para Fechamento", "Registro de Venda"
 ])
 
 if aba == "Consulta de Preços":
     modelo = st.selectbox("Selecione o modelo:", list(precos_mock.keys()))
     if st.button("🔍 Pesquisar preços atualizados"):
-        st.success("Dados atualizados com base simulada.")
+        st.success("Dados simulados atualizados com sucesso.")
     if modelo:
         fontes = precos_mock[modelo]
         df = pd.DataFrame(list(fontes.items()), columns=["Fonte", "Preço (R$)"])
@@ -134,6 +159,7 @@ elif aba == "Simulador de Troca":
     st.markdown(f"♻️ Valor estimado do usado com avarias: R$ {valor_oferecido:.2f}")
     st.markdown(f"💸 Diferença a ser paga pelo cliente: R$ {valor_a_pagar:.2f}")
     st.success(f"📊 Margem estimada da negociação: {margem:.2f}%")
+    st.markdown(verificar_similares(modelo_desejado))
 
 elif aba == "Insights para Fechamento":
     modelo_desejado = st.selectbox("Modelo que o cliente quer comprar:", list(precos_mock.keys()))
@@ -142,3 +168,13 @@ elif aba == "Insights para Fechamento":
         for insight in gerar_insights(modelo_desejado, estoque_demo):
             st.write("- ", insight)
         st.caption("Use essas estratégias para convencer o cliente e fechar mais vendas.")
+
+elif aba == "Registro de Venda":
+    st.subheader("📝 Registrar nova venda")
+    modelo_vendido = st.selectbox("Modelo vendido:", list(precos_mock.keys()))
+    if st.button("Registrar venda"):
+        sucesso = registrar_venda(modelo_vendido)
+        if sucesso:
+            st.success("✅ Venda registrada e estoque atualizado.")
+        else:
+            st.error("❌ Modelo sem estoque disponível. Verifique novamente.")
